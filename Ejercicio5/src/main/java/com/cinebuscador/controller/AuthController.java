@@ -1,8 +1,8 @@
 package com.cinebuscador.controller;
 
-import com.cinebuscador.config.EncryptionService;
-import com.cinebuscador.repository.UserRepository;
+import com.cinebuscador.config.PasswordHashService;
 import com.cinebuscador.model.User;
+import com.cinebuscador.repository.UserRepository;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,89 +13,191 @@ import org.springframework.web.bind.annotation.RequestParam;
 public class AuthController {
 
     private final UserRepository userRepository;
+    private final PasswordHashService passwordHashService;
 
-    public AuthController(UserRepository userRepository) {
+    public AuthController(
+            UserRepository userRepository,
+            PasswordHashService passwordHashService) {
+
         this.userRepository = userRepository;
+        this.passwordHashService = passwordHashService;
     }
 
-    // ==================== LOGIN PAGE ====================
     @GetMapping("/")
     public String loginPage(Model model) {
-        model.addAttribute("loginForm", new LoginForm());
-        model.addAttribute("registerForm", new RegisterForm());
-        return "index";
-    }
-
-    // ==================== LOGIN ====================
-    @PostMapping("/login")
-    public String login(@RequestParam String username, @RequestParam String password, Model model) {
-        User user = userRepository.findByUsername(username).orElse(null);
-
-        if (user != null) {
-            // Descifrar la contraseña almacenada y comparar con la ingresada
-            String decryptedPassword = EncryptionService.decrypt(user.getPassword());
-            if (password.equals(decryptedPassword)) {
-                model.addAttribute("loginSuccess", true);
-                model.addAttribute("welcomeUser", username);
-                model.addAttribute("encryptedPassword", user.getPassword());
-                return "index";
-            }
-        }
-        model.addAttribute("loginError", "Usuario o contraseña incorrecta");
         addForms(model);
         return "index";
     }
 
-    // ==================== REGISTER ====================
+    @PostMapping("/login")
+    public String login(
+            @RequestParam String username,
+            @RequestParam String password,
+            Model model) {
+
+        User user =
+            userRepository
+                .findByUsername(username)
+                .orElse(null);
+
+        if (
+            user != null &&
+            passwordHashService.matches(
+                password,
+                user.getPassword()
+            )
+        ) {
+
+            model.addAttribute(
+                "loginSuccess",
+                true
+            );
+
+            model.addAttribute(
+                "welcomeUser",
+                username
+            );
+
+            addForms(model);
+
+            return "index";
+        }
+
+        model.addAttribute(
+            "loginError",
+            "Usuario o contraseña incorrecta"
+        );
+
+        addForms(model);
+
+        return "index";
+    }
+
     @PostMapping("/register")
-    public String register(@RequestParam String username, @RequestParam String password,
-                           @RequestParam String confirmPwd, Model model) {
+    public String register(
+            @RequestParam String username,
+            @RequestParam String password,
+            @RequestParam String confirmPwd,
+            Model model) {
+
         if (!password.equals(confirmPwd)) {
-            model.addAttribute("registerError", "Las contraseñas no coinciden");
+
+            model.addAttribute(
+                "registerError",
+                "Las contraseñas no coinciden"
+            );
+
             addForms(model);
+
             return "index";
         }
 
-        if (userRepository.findByUsername(username).isPresent()) {
-            model.addAttribute("registerError", "El usuario ya existe");
+        if (
+            userRepository
+                .findByUsername(username)
+                .isPresent()
+        ) {
+
+            model.addAttribute(
+                "registerError",
+                "El usuario ya existe"
+            );
+
             addForms(model);
+
             return "index";
         }
 
+        User nuevoUsuario = new User();
 
-        com.cinebuscador.model.User nuevoUsuario = new com.cinebuscador.model.User();
         nuevoUsuario.setUsername(username);
-        nuevoUsuario.setPassword(EncryptionService.encrypt(password));
+
+        nuevoUsuario.setPassword(
+            passwordHashService.hash(password)
+        );
+
         userRepository.save(nuevoUsuario);
 
-        model.addAttribute("registerSuccess", true);
-        model.addAttribute("registeredUsername", username);
-        model.addAttribute("encryptedPassword", EncryptionService.encrypt(password));
+        model.addAttribute(
+            "registerSuccess",
+            true
+        );
+
+        model.addAttribute(
+            "registeredUsername",
+            username
+        );
+
         addForms(model);
+
         return "index";
     }
 
-    // ==================== FORM BEANS ====================
     public static class LoginForm {
-        private String username, password;
-        public String getUsername() { return username; }
-        public void setUsername(String u) { username = u; }
-        public String getPassword() { return password; }
-        public void setPassword(String p) { password = p; }
+
+        private String username;
+        private String password;
+
+        public String getUsername() {
+            return username;
+        }
+
+        public void setUsername(String username) {
+            this.username = username;
+        }
+
+        public String getPassword() {
+            return password;
+        }
+
+        public void setPassword(String password) {
+            this.password = password;
+        }
     }
 
     public static class RegisterForm {
-        private String username, password, confirmPwd;
-        public String getUsername() { return username; }
-        public void setUsername(String u) { username = u; }
-        public String getPassword() { return password; }
-        public void setPassword(String p) { password = p; }
-        public String getConfirmPwd() { return confirmPwd; }
-        public void setConfirmPwd(String c) { confirmPwd = c; }
+
+        private String username;
+        private String password;
+        private String confirmPwd;
+
+        public String getUsername() {
+            return username;
+        }
+
+        public void setUsername(String username) {
+            this.username = username;
+        }
+
+        public String getPassword() {
+            return password;
+        }
+
+        public void setPassword(String password) {
+            this.password = password;
+        }
+
+        public String getConfirmPwd() {
+            return confirmPwd;
+        }
+
+        public void setConfirmPwd(
+                String confirmPwd) {
+
+            this.confirmPwd = confirmPwd;
+        }
     }
 
     private void addForms(Model model) {
-        model.addAttribute("loginForm", new LoginForm());
-        model.addAttribute("registerForm", new RegisterForm());
+
+        model.addAttribute(
+            "loginForm",
+            new LoginForm()
+        );
+
+        model.addAttribute(
+            "registerForm",
+            new RegisterForm()
+        );
     }
 }

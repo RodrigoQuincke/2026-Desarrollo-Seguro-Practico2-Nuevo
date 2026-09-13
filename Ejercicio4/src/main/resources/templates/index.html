@@ -24,11 +24,6 @@
 <body>
     <h1>Cine Buscador - Busqueda de Funciones</h1>
 
-    <div class="warning-box">
-        &#x26A0; Ejercicio educativo: la busqueda incluye una vulnerabilidad de SSTI (SpEL injection).
-        No uses este codigo en produccion.
-    </div>
-
     <div class="search-form">
         <form method="get" action="/">
             <input type="text" name="buscar" placeholder="Buscar funcion..." th:value="${query != null ? query : ''}">

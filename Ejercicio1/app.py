@@ -6,6 +6,14 @@ app = Flask(__name__)
 app.config.from_object(Config)
 
 
+SORT_COLUMNS = {
+    'nombre': 'peliculas.nombre',
+    'fecha': 'funciones.fecha_hora',
+}
+
+SORT_DIRECTIONS = {'ASC', 'DESC'}
+
+
 def get_db():
     if 'db' not in g:
         g.db = sqlite3.connect(app.config['DATABASE'])
@@ -22,33 +30,56 @@ def close_db(exception):
 
 def buscar_funciones(query, sort_by='nombre', sort_dir='ASC'):
     db = get_db()
-    sql = f"SELECT peliculas.nombre as pelicula, funciones.fecha_hora, " \
-          f"(funciones.asientos_totales - funciones.asientos_ocupados) as disponibles " \
-          f"FROM funciones " \
-          f"JOIN peliculas ON funciones.pelicula_id = peliculas.id " \
-          f"WHERE peliculas.nombre LIKE '%{query}%' " \
-          f"ORDER BY {'peliculas.nombre' if sort_by == 'nombre' else 'funciones.fecha_hora'} " \
-          f"{sort_dir}"
-    return db.execute(sql).fetchall()
+
+    order_column = SORT_COLUMNS.get(sort_by, SORT_COLUMNS['nombre'])
+
+    order_direction = sort_dir.upper()
+    if order_direction not in SORT_DIRECTIONS:
+        order_direction = 'ASC'
+
+    sql = f"""
+        SELECT peliculas.nombre AS pelicula,
+               funciones.fecha_hora,
+               (funciones.asientos_totales - funciones.asientos_ocupados) AS disponibles
+        FROM funciones
+        JOIN peliculas ON funciones.pelicula_id = peliculas.id
+        WHERE peliculas.nombre LIKE ?
+        ORDER BY {order_column} {order_direction}
+    """
+
+    return db.execute(sql, (f'%{query}%',)).fetchall()
 
 
 @app.route('/')
 def index():
     query = request.args.get('buscar', '')
     sort_by = request.args.get('ordenar_por', 'nombre')
-    sort_dir = request.args.get('sentido', 'ASC')
+    sort_dir = request.args.get('sentido', 'ASC').upper()
+
+    if sort_by not in SORT_COLUMNS:
+        sort_by = 'nombre'
+
+    if sort_dir not in SORT_DIRECTIONS:
+        sort_dir = 'ASC'
+
     resultados = []
+
     if query:
         resultados = buscar_funciones(query, sort_by, sort_dir)
-    return render_template('index.html',
-                           resultados=resultados,
-                           query=query,
-                           sort_by=sort_by,
-                           sort_dir=sort_dir)
+
+    return render_template(
+        'index.html',
+        resultados=resultados,
+        query=query,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+    )
 
 
 if __name__ == '__main__':
     import os
-    host=os.environ.get('FLASK_HOST', '0.0.0.0')
-    debug = os.environ.get('DEBUG_MODE', 'true').lower() in ('true', '1', 'yes')
-    app.run(debug=debug,host=host)
+
+    host = os.environ.get('FLASK_HOST', '0.0.0.0')
+    debug = os.environ.get('DEBUG_MODE', 'false').lower() in ('true', '1', 'yes')
+
+    app.run(debug=debug, host=host)
